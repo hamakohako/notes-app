@@ -28,6 +28,11 @@ def create_app(test_config=None):
             return view(**kwargs)
         return wrapped_view
 
+    @app.errorhandler(404)
+    def page_not_found(e):
+        return render_template('404.html'), 404
+
+
     @app.before_request
     def load_user():
         user_id = session.get('user_id')
@@ -84,7 +89,7 @@ def create_app(test_config=None):
 
     @app.route('/')
     def index():
-        return 'INDEX123'
+        return redirect(url_for('note_index'))
 
     @app.route('/log_out', methods=('GET', 'DELETE'))
     def log_out():
@@ -117,5 +122,39 @@ def create_app(test_config=None):
 
             flash(error, 'error')
         return render_template('note_create.html')
+
+    @app.route('/notes/<note_id>/edit', methods=('POST', 'PATCH', 'PUT', 'GET'))
+    @require_login
+    def note_update(note_id):
+        note = Note.query.filter_by(user_id=g.user.id, id=note_id).first_or_404()
+        if request.method in ['POST', 'PATCH', 'PUT']:
+            title = request.form['title']
+            body = request.form['body']
+            error = None
+
+            if not title:
+                error = 'Title is requeird'
+
+            if not error:
+                note.title = title
+                note.body = body
+                db.session.add(note)
+                db.session.commit()
+                flash(f"Successfully update ntoe: {title}", 'success')
+                return redirect(url_for('note_index'))
+            
+            flash(error, 'error')
+
+        return render_template('note_update.html', note=note)
         
+    @app.route('/notes/<note_id>/delete', methods=('DELETE', 'GET'))
+    @require_login
+    def note_delete(note_id):
+        note = Note.query.filter_by(user_id=g.user.id, id=note_id).first_or_404()
+        db.session.delete(note)
+        db.session.commit()
+        flash(f"Successfully delete note: {note.title}", 'success')
+        return redirect(url_for('note_index'))
+
+
     return app
